@@ -8,6 +8,7 @@
 |---|---|---|
 | [kernel-diagrams](skills/kernel-diagrams/SKILL.md) | 分析 Linux 内核等大型 C 源码,用 Archify 生成交互原理图并构建画廊 | Archify、Chrome headless、Node ≥ 18 |
 | [layout-map](skills/layout-map/SKILL.md) | 用 HTML/CSS 画磁盘块组、地址空间、内存区间等布局图,替代 ASCII | 无;引入 `assets/layout-map.css` |
+| [tree-map](skills/tree-map/SKILL.md) | 用 HTML/CSS 画对象包含、资源树、决策树等层级结构,替代 ASCII 的 ├──/└── | 无;引入 `assets/tree-map.css` |
 
 ## Agents
 
@@ -22,6 +23,7 @@
 ```bash
 mkdir -p .opencode/skills .opencode/agents
 cp -r skills/layout-map .opencode/skills/
+cp -r skills/tree-map .opencode/skills/
 cp -r skills/kernel-diagrams .opencode/skills/
 cp agents/kernel-diagrammer.md .opencode/agents/
 ```
@@ -45,4 +47,5 @@ cp agents/kernel-diagrammer.md .opencode/agents/
 
 - `kernel-diagrams` 默认内核源码路径为 `~/workspace/Git/git.kernel.org/linux`,可在任务中指定其他路径。
 - `layout-map` 是示意性组件;精确布局以 `dumpe2fs`、`/proc/<pid>/maps` 等工具输出为准。
+- `tree-map` 用于层级/包含/决策;带 `path:line` 的调用链建议保留代码块或 Archify 图。
 - 内容版权与使用限制:未经作者书面许可,请勿用于商业用途或直接转载。
