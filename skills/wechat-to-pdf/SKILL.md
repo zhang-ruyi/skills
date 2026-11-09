@@ -32,6 +32,8 @@ python3 scripts/wx2pdf.py "https://mp.weixin.qq.com/s/XXXXXXXX" \
 |---|---|
 | `--out` | 输出 PDF 路径;不填则用标题命名,放在工作目录里 |
 | `--dir` | 工作目录(图片、可选 clean.html);默认 `.wx2pdf/<标题>-<时间>/` |
+| `--html` | 不抓取,改读本地保存的 HTML(反爬页兜底) |
+| `--page-url` | 配合 `--html`:图片 Referer 与相对地址基准,默认 `https://mp.weixin.qq.com/` |
 | `--no-images` | 不下载配图,只要文字 |
 | `--keep-html` | 额外保留清洗后的 `clean.html`,方便调 CSS |
 
@@ -43,7 +45,7 @@ ok  pages=28  images=28/28  size=3518410  out=/path/article.pdf
 
 ## 脚本做了什么(顺序不能乱)
 
-1. **抓 HTML**:带移动端 UA 请求,识别 `mp.weixin.qq.com`。
+1. **抓 HTML**:带移动端 UA 请求,识别 `mp.weixin.qq.com`。部分网络对 AAAA(IPv6)查询超时,会让 `getaddrinfo` 整体失败,所以脚本优先只查 IPv4,并对抓取做 3 次退避重试。
 2. **反爬校验**:标题为空或命中「环境异常」直接报错,不生成半成品。
 3. **选正文**:`#js_content` → `article` → `main` → `body` 逐级降级;走 `body` 时先删 `header/nav/footer/aside`。
 4. **先下图片,再清样式**。微信图片真实地址在 `data-src`,而清洗阶段会删掉所有 `data-*`;顺序反了就会得到一本没有图的 PDF。下载时带 `Referer: https://mp.weixin.qq.com/`,否则 `mmbiz.qpic.cn` 返回 403。
@@ -61,6 +63,14 @@ pdftoppm -png -r 80 -f 8 -l 8 out.pdf mid       # 抽一页正文
 ```
 
 重点看三页:**首页**(标题/作者/日期)、**正文页**(段落宽度、列表缩进)、**图页**(图片是否完整、有没有被裁)。页面偏窄或出现大片留白,通常是样式清洗没生效。
+
+## 排障
+
+失败时先查 [references/troubleshooting.md](references/troubleshooting.md),按现象定位。最常见的三类:
+
+- **DNS 解析失败**:`Temporary failure in name resolution`,多为 AAAA 超时;脚本已优先 IPv4 并重试,仍失败则改 DNS 或走 `--html`。
+- **「环境异常」反爬页**:脚本直接失败不产出半成品;用浏览器另存 HTML 后 `--html` 转换。
+- **图片 0 张或全 403**:`data-src` 被提前清掉(顺序 bug,已修)、缺 Referer、或图片签名过期。
 
 ## 已知限制
 

@@ -13,7 +13,9 @@ import argparse
 import datetime
 import os
 import re
+import socket
 import sys
+import time
 import urllib.parse
 import urllib.request
 
@@ -56,18 +58,41 @@ td, th { border: 1px solid #ddd; padding: 1.5mm; }
 """
 
 
+
+# 部分网络对 AAAA 查询超时，getaddrinfo 会整体失败；优先只查 IPv4。
+_ORIG_GETADDRINFO = socket.getaddrinfo
+
+
+def _ipv4_first(host, port, family=0, type=0, proto=0, flags=0):
+    try:
+        return _ORIG_GETADDRINFO(host, port, socket.AF_INET, type, proto, flags)
+    except socket.gaierror:
+        return _ORIG_GETADDRINFO(host, port, family, type, proto, flags)
+
+
+socket.getaddrinfo = _ipv4_first
+
+
 def fail(msg):
     print("ERROR: " + msg, file=sys.stderr)
     sys.exit(1)
 
 
-def fetch(url, referer=None):
+def fetch(url, referer=None, retries=3):
     headers = {"User-Agent": UA, "Accept-Language": "zh-CN,zh;q=0.9"}
     if referer:
         headers["Referer"] = referer
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=40) as r:
-        return r.read(), r.headers.get("Content-Type", "")
+    last = None
+    for i in range(retries):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return r.read(), r.headers.get("Content-Type", "")
+        except Exception as e:  # DNS 抖动/超时，退避重试
+            last = e
+            if i + 1 < retries:
+                time.sleep(0.6 * (i + 1))
+    raise last
 
 
 def ext_for(ctype, url):
@@ -154,7 +179,10 @@ def download_images(content, img_dir, page_url, enabled=True):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("url")
+    ap.add_argument("url", nargs="?", help="文章 URL；用 --html 时可省略")
+    ap.add_argument("--html", help="读取本地保存的 HTML（反爬页的兜底方式）")
+    ap.add_argument("--page-url", default="https://mp.weixin.qq.com/",
+                    help="配合 --html：图片 Referer 与相对地址的基准 URL")
     ap.add_argument("--out", help="输出 PDF 路径")
     ap.add_argument("--dir", help="工作目录（默认 .wx2pdf/<slug>-<时间>）")
     ap.add_argument("--no-images", action="store_true", help="不下载配图")
@@ -167,9 +195,18 @@ def main():
     except ImportError as e:
         fail(f"缺少 Python 依赖: {e}. 先运行 pip install weasyprint beautifulsoup4 lxml")
 
-    print("fetching", args.url)
-    raw, _ = fetch(args.url)
-    html_text = raw.decode("utf-8", "replace")
+    if args.html:
+        print("reading", args.html)
+        with open(args.html, encoding="utf-8", errors="replace") as f:
+            html_text = f.read()
+        page_url = args.page_url
+    elif args.url:
+        print("fetching", args.url)
+        raw, _ = fetch(args.url)
+        html_text = raw.decode("utf-8", "replace")
+        page_url = args.url
+    else:
+        fail("需要文章 URL，或用 --html 指定本地 HTML")
 
     soup = BeautifulSoup(html_text, "lxml")
     og = soup.find("meta", property="og:title")
@@ -206,7 +243,7 @@ def main():
     os.makedirs(workdir, exist_ok=True)
 
     ok, total = download_images(content, os.path.join(workdir, "img"),
-                                args.url, enabled=not args.no_images)
+                                page_url, enabled=not args.no_images)
     normalize(content)
 
     body = content.decode_contents()
