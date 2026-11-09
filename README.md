@@ -34,6 +34,13 @@ cp agents/kernel-diagrammer.md .opencode/agents/
 
 全局:复制到 `~/.config/opencode/skills/` 与 `~/.config/opencode/agents/`,然后重启 opencode。
 
+跨 agent(DSH、Codex 等)读同一个共享根 `~/.agents/skills/`。用软链指向本仓库里的同一份,避免多副本漂移:
+
+```bash
+mkdir -p ~/.agents/skills
+ln -s "$PWD/skills/wechat-to-pdf" ~/.agents/skills/wechat-to-pdf
+```
+
 ## 依赖
 
 - **Archify**(仅 kernel-diagrams):
